@@ -2,10 +2,10 @@
 /*
 ################################################################################
 #
-# r8125 is the Linux device driver released for Realtek 2.5Gigabit Ethernet
+# r8125 is the Linux device driver released for Realtek 2.5 Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2020 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2024 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -47,7 +47,6 @@
 int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
 {
         struct rtltool_cmd my_cmd;
-        unsigned long flags;
         int ret;
 
         if (copy_from_user(&my_cmd, ifr->ifr_data, sizeof(my_cmd)))
@@ -56,8 +55,10 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
         ret = 0;
         switch (my_cmd.cmd) {
         case RTLTOOL_READ_MAC:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
+                if ((my_cmd.offset + my_cmd.len) > pci_resource_len(tp->pci_dev, 2)) {
+                        ret = -EINVAL;
+                        break;
+                }
 
                 if (my_cmd.len==1)
                         my_cmd.data = readb(tp->mmio_addr+my_cmd.offset);
@@ -77,8 +78,10 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_MAC:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
+                if ((my_cmd.offset + my_cmd.len) > pci_resource_len(tp->pci_dev, 2)) {
+                        ret = -EINVAL;
+                        break;
+                }
 
                 if (my_cmd.len==1)
                         writeb(my_cmd.data, tp->mmio_addr+my_cmd.offset);
@@ -94,13 +97,7 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_READ_PHY:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 my_cmd.data = rtl8125_mdio_prot_read(tp, my_cmd.offset);
-                spin_unlock_irqrestore(&tp->lock, flags);
-
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -109,22 +106,11 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_PHY:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_mdio_prot_write(tp, my_cmd.offset, my_cmd.data);
-                spin_unlock_irqrestore(&tp->lock, flags);
                 break;
 
         case RTLTOOL_READ_EPHY:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 my_cmd.data = rtl8125_ephy_read(tp, my_cmd.offset);
-                spin_unlock_irqrestore(&tp->lock, flags);
-
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -133,20 +119,13 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_EPHY:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_ephy_write(tp, my_cmd.offset, my_cmd.data);
-                spin_unlock_irqrestore(&tp->lock, flags);
                 break;
 
         case RTLTOOL_READ_ERI:
                 my_cmd.data = 0;
                 if (my_cmd.len==1 || my_cmd.len==2 || my_cmd.len==4) {
-                        spin_lock_irqsave(&tp->lock, flags);
                         my_cmd.data = rtl8125_eri_read(tp, my_cmd.offset, my_cmd.len, ERIAR_ExGMAC);
-                        spin_unlock_irqrestore(&tp->lock, flags);
                 } else {
                         ret = -EOPNOTSUPP;
                         break;
@@ -160,16 +139,8 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_ERI:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
                 if (my_cmd.len==1 || my_cmd.len==2 || my_cmd.len==4) {
-                        spin_lock_irqsave(&tp->lock, flags);
                         rtl8125_eri_write(tp, my_cmd.offset, my_cmd.len, my_cmd.data, ERIAR_ExGMAC);
-                        spin_unlock_irqrestore(&tp->lock, flags);
                 } else {
                         ret = -EOPNOTSUPP;
                         break;
@@ -177,9 +148,6 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_READ_PCI:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
                 my_cmd.data = 0;
                 if (my_cmd.len==1)
                         pci_read_config_byte(tp->pci_dev, my_cmd.offset,
@@ -202,9 +170,6 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_PCI:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
                 if (my_cmd.len==1)
                         pci_write_config_byte(tp->pci_dev, my_cmd.offset,
                                               my_cmd.data);
@@ -222,13 +187,7 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_READ_EEPROM:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 my_cmd.data = rtl8125_eeprom_read_sc(tp, my_cmd.offset);
-                spin_unlock_irqrestore(&tp->lock, flags);
-
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -237,24 +196,13 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTLTOOL_WRITE_EEPROM:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_eeprom_write_sc(tp, my_cmd.offset, my_cmd.data);
-                spin_unlock_irqrestore(&tp->lock, flags);
                 break;
 
         case RTL_READ_OOB_MAC:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_oob_mutex_lock(tp);
                 my_cmd.data = rtl8125_ocp_read(tp, my_cmd.offset, 4);
                 rtl8125_oob_mutex_unlock(tp);
-                spin_unlock_irqrestore(&tp->lock, flags);
-
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -262,52 +210,31 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTL_WRITE_OOB_MAC:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
                 if (my_cmd.len == 0 || my_cmd.len > 4)
                         return -EOPNOTSUPP;
 
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_oob_mutex_lock(tp);
                 rtl8125_ocp_write(tp, my_cmd.offset, my_cmd.len, my_cmd.data);
                 rtl8125_oob_mutex_unlock(tp);
-                spin_unlock_irqrestore(&tp->lock, flags);
                 break;
 
         case RTL_ENABLE_PCI_DIAG:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 tp->rtk_enable_diag = 1;
-                spin_unlock_irqrestore(&tp->lock, flags);
 
                 dprintk("enable rtk diag\n");
                 break;
 
         case RTL_DISABLE_PCI_DIAG:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 tp->rtk_enable_diag = 0;
-                spin_unlock_irqrestore(&tp->lock, flags);
 
                 dprintk("disable rtk diag\n");
                 break;
 
         case RTL_READ_MAC_OCP:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
                 if (my_cmd.offset % 2)
                         return -EOPNOTSUPP;
 
-                spin_lock_irqsave(&tp->lock, flags);
                 my_cmd.data = rtl8125_mac_ocp_read(tp, my_cmd.offset);
-                spin_unlock_irqrestore(&tp->lock, flags);
-
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -315,25 +242,14 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTL_WRITE_MAC_OCP:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
                 if ((my_cmd.offset % 2) || (my_cmd.len != 2))
                         return -EOPNOTSUPP;
 
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_mac_ocp_write(tp, my_cmd.offset, (u16)my_cmd.data);
-                spin_unlock_irqrestore(&tp->lock, flags);
                 break;
 
         case RTL_DIRECT_READ_PHY_OCP:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 my_cmd.data = rtl8125_mdio_prot_direct_read_phy_ocp(tp, my_cmd.offset);
-                spin_unlock_irqrestore(&tp->lock, flags);
-
                 if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
                         ret = -EFAULT;
                         break;
@@ -342,13 +258,33 @@ int rtl8125_tool_ioctl(struct rtl8125_private *tp, struct ifreq *ifr)
                 break;
 
         case RTL_DIRECT_WRITE_PHY_OCP:
-                if (!capable(CAP_NET_ADMIN))
-                        return -EPERM;
-
-                spin_lock_irqsave(&tp->lock, flags);
                 rtl8125_mdio_prot_direct_write_phy_ocp(tp, my_cmd.offset, my_cmd.data);
-                spin_unlock_irqrestore(&tp->lock, flags);
                 break;
+
+#ifdef ENABLE_FIBER_SUPPORT
+        case RTL_READ_FIBER_PHY:
+                if (!HW_FIBER_STATUS_CONNECTED(tp)) {
+                        ret = -EOPNOTSUPP;
+                        break;
+                }
+
+                my_cmd.data = rtl8125_fiber_mdio_read(tp, my_cmd.offset);
+                if (copy_to_user(ifr->ifr_data, &my_cmd, sizeof(my_cmd))) {
+                        ret = -EFAULT;
+                        break;
+                }
+
+                break;
+
+        case RTL_WRITE_FIBER_PHY:
+                if (!HW_FIBER_STATUS_CONNECTED(tp)) {
+                        ret = -EOPNOTSUPP;
+                        break;
+                }
+
+                rtl8125_fiber_mdio_write(tp, my_cmd.offset, my_cmd.data);
+                break;
+#endif /* ENABLE_FIBER_SUPPORT */
 
         default:
                 ret = -EOPNOTSUPP;

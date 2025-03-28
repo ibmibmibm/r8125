@@ -32,22 +32,32 @@
  *  US6,570,884, US6,115,776, and US6,327,625.
  ***********************************************************************************/
 
-//EEPROM opcodes
-#define RTL_EEPROM_READ_OPCODE      06
-#define RTL_EEPROM_WRITE_OPCODE     05
-#define RTL_EEPROM_ERASE_OPCODE     07
-#define RTL_EEPROM_EWEN_OPCODE      19
-#define RTL_EEPROM_EWDS_OPCODE      16
+#ifndef _LINUX_R8125_FIBER_H
+#define _LINUX_R8125_FIBER_H
 
-#define RTL_CLOCK_RATE  3
+enum {
+        FIBER_MODE_NIC_ONLY = 0,
+        FIBER_MODE_RTL8125D_RTL8221D,
+        FIBER_MODE_MAX
+};
 
-void rtl8125_eeprom_type(struct rtl8125_private *tp);
-void rtl8125_eeprom_cleanup(struct rtl8125_private *tp);
-u16 rtl8125_eeprom_read_sc(struct rtl8125_private *tp, u16 reg);
-void rtl8125_eeprom_write_sc(struct rtl8125_private *tp, u16 reg, u16 data);
-void rtl8125_shift_out_bits(struct rtl8125_private *tp, int data, int count);
-u16 rtl8125_shift_in_bits(struct rtl8125_private *tp);
-void rtl8125_raise_clock(struct rtl8125_private *tp, u8 *x);
-void rtl8125_lower_clock(struct rtl8125_private *tp, u8 *x);
-void rtl8125_stand_by(struct rtl8125_private *tp);
-void rtl8125_set_eeprom_sel_low(struct rtl8125_private *tp);
+enum {
+        FIBER_STAT_NOT_CHECKED = 0,
+        FIBER_STAT_DISCONNECT,
+        FIBER_STAT_CONNECT_GPO_C45,
+        FIBER_STAT_MAX
+};
+
+#define HW_FIBER_MODE_ENABLED(_M)        ((_M)->HwFiberModeVer > 0)
+#define HW_FIBER_STATUS_CONNECTED(_M)        (((_M)->HwFiberStat == FIBER_STAT_CONNECT_GPO_C45))
+#define HW_FIBER_STATUS_DISCONNECTED(_M)        ((_M)->HwFiberStat == FIBER_STAT_DISCONNECT)
+
+struct rtl8125_private;
+
+void rtl8125_hw_fiber_phy_config(struct rtl8125_private *tp);
+void rtl8125_check_fiber_mode_support(struct rtl8125_private *tp);
+void rtl8125_fiber_mdio_write( struct rtl8125_private *tp, u32 reg, u16 val);
+u16 rtl8125_fiber_mdio_read(struct rtl8125_private *tp, u32 reg);
+unsigned int rtl8125_fiber_link_ok(struct net_device *dev);
+
+#endif /* _LINUX_R8125_FIBER_H */
