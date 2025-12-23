@@ -4,7 +4,7 @@
 # r8125 is the Linux device driver released for Realtek 2.5 Gigabit Ethernet
 # controllers with PCI-Express interface.
 #
-# Copyright(c) 2024 Realtek Semiconductor Corp. All rights reserved.
+# Copyright(c) 2025 Realtek Semiconductor Corp. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -31,10 +31,9 @@
 ################################################################################
 
 CONFIG_SOC_LAN = y
-ENABLE_FIBER_SUPPORT = y
+ENABLE_FIBER_SUPPORT = n
 ENABLE_REALWOW_SUPPORT = n
 ENABLE_DASH_SUPPORT = n
-ENABLE_DASH_PRINTER_SUPPORT = n
 CONFIG_DOWN_SPEED_100 = n
 CONFIG_ASPM = y
 ENABLE_S5WOL = y
@@ -72,10 +71,6 @@ ifneq ($(KERNELRELEASE),)
 	ifeq ($(ENABLE_DASH_SUPPORT), y)
 		r8125-objs += r8125_dash.o
 		EXTRA_CFLAGS += -DENABLE_DASH_SUPPORT
-	endif
-	ifeq ($(ENABLE_DASH_PRINTER_SUPPORT), y)
-		r8125-objs += r8125_dash.o
-		EXTRA_CFLAGS += -DENABLE_DASH_SUPPORT -DENABLE_DASH_PRINTER_SUPPORT
 	endif
 	EXTRA_CFLAGS += -DCONFIG_R8125_NAPI
 	EXTRA_CFLAGS += -DCONFIG_R8125_VLAN
@@ -140,6 +135,9 @@ ifneq ($(KERNELRELEASE),)
 	ifeq ($(ENABLE_GIGA_LITE), y)
 		EXTRA_CFLAGS += -DENABLE_GIGA_LITE
 	endif
+
+	# Backward compatibility
+	ccflags-y  += $(EXTRA_CFLAGS)
 else
 	BASEDIR := /lib/modules/$(shell uname -r)
 	KERNELDIR ?= $(BASEDIR)/build
